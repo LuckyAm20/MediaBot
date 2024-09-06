@@ -14,60 +14,11 @@ from dotenv import load_dotenv
 from sqlalchemy import Column, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from classifier import KNearestNeighbours
-from knn_music import KNN_Class
-
-load_dotenv()
-bot = telebot.TeleBot(os.getenv('TELEGRAM_API_TOKEN'))
-
-Base = declarative_base()
-genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family',
-          'Fantasy', 'Film-Noir', 'Game-Show', 'History', 'Horror', 'Music', 'Musical', 'Mystery', 'News', 'Reality-TV',
-          'Romance', 'Sci-Fi', 'Short', 'Sport', 'Thriller', 'War', 'Western']
-with open('data/movie_data.json', 'r+', encoding='utf-8') as f:
-    data = json.load(f)
-with open('data/movie_titles.json', 'r+', encoding='utf-8') as f:
-    movie_titles = json.load(f)
-movies = [title[0] for title in movie_titles]
-
-with open('data/music_data.json', 'r+', encoding='utf-8') as f:
-    data_music = json.load(f)
-with open('data/tracks.json', 'r+', encoding='utf-8') as f:
-    tracks = json.load(f)
-songs = [(value[0], value[1]) for value in tracks]
-
-with open('data/movies_kinopoisk.json', 'r', encoding='utf-8') as file:
-    movie_data_kinopoisk = json.load(file)
-with open('data/movies_imdb.json', 'r', encoding='utf-8') as file:
-    movie_data_imdb = json.load(file)
-
-with open('data/music_spotify.json', 'r', encoding='utf-8') as file:
-    music_data_spotify = json.load(file)
-
-spotify_artist = []
-for artist in [el['artists'] for el in music_data_spotify]:
-    if artist not in spotify_artist and artist.isalnum():
-        spotify_artist.append(artist)
-
-spotify_genre = []
-for genre in [el['track_genre'] for el in music_data_spotify]:
-    if genre not in spotify_genre:
-        spotify_genre.append(genre)
-
-
-class User(Base):
-    __tablename__ = 'users'
-
-    id = Column(Integer, primary_key=True)
-    username = Column(String)
-    login = Column(String)
-    password = Column(String)
-    reminder_time = Column(DateTime)
-
-
-engine = create_engine('sqlite:///users.db')
-Base.metadata.create_all(engine)
-Session = sessionmaker(bind=engine)
+from bot_data import data_music, tracks, movie_titles, data, songs, movies, genres, movie_data_imdb, \
+    movie_data_kinopoisk, music_data_spotify, spotify_artist, spotify_genre
+from knn import KNN
+from remind import start_check_reminders, process_reminder_time, Session, User
+from bot_data import bot
 
 
 # engine = create_engine('postgresql://postgres:postgres@localhost:5432/media-fusion')
@@ -194,7 +145,8 @@ def process_keyboard_(message):
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 spotify по жанрам')
 def process_keyboard_(message):
-    bot.send_message(message.chat.id, f'Выберите один жанр из списка:', reply_markup=create_inline_keyboard_spotify_genre())
+    bot.send_message(message.chat.id, f'Выберите один жанр из списка:',
+                     reply_markup=create_inline_keyboard_spotify_genre())
 
 
 def create_inline_keyboard_spotify_genre():
@@ -900,8 +852,7 @@ def show_films_title(message, count, title):
         if movie_info:
             bot.send_message(message.chat.id, f'{movie_info[0]}\n'
                                               f'{movie_info[1]}\n'
-                                              f'{movie_info[2]}\n'
-                                              f'{movie_info[3]}\n')
+                                              f'{movie_info[2]}\n')
 
         else:
             bot.send_message(message.chat.id, 'Не удалось получить информацию о фильме')
@@ -909,7 +860,7 @@ def show_films_title(message, count, title):
 
 def show_music_title(message, count, title: str):
     test_points = data_music[songs.index(tuple(title.split('*')))]
-    table = music_recommendation_basic(test_points, count + 1)
+    table = music_recommendation(test_points, count + 1)
     table.pop(0)
     for ind, value in enumerate(table, start=1):
         bot.send_message(message.chat.id, f'{ind})Author: {value[0]}\n'
@@ -935,14 +886,14 @@ def parse_website_film(url):
             movie_cast = str(movie_descr[1]).replace('With', 'Актёры: ').strip()
             movie_story = 'Описание: ' + str(movie_descr[2]).strip() + '.'
 
-            rating = s_data.find("div", class_="sc-bde20123-3 gPVQxL")
-            rating = str(rating).split('<div class="sc-bde20123-3 gPVQxL')
-            rating = str(rating[1]).split("</div>")
-            rating = str(rating[0]).replace(''' "> ''', '').replace('">', '')
+            # rating = s_data.find("div", class_="sc-bde20123-3 gPVQxL")
+            # rating = str(rating).split('<div class="sc-bde20123-3 gPVQxL')
+            # rating = str(rating[1]).split("</div>")
+            # rating = str(rating[0]).replace(''' "> ''', '').replace('">', '')
+            #
+            # movie_rating = 'Общие сборы: ' + rating
 
-            movie_rating = 'Общие сборы: ' + rating
-
-            return [movie_director, movie_cast, movie_story, movie_rating]
+            return [movie_director, movie_cast, movie_story]
         else:
             return None
     else:
@@ -965,55 +916,25 @@ def parse_video_link(url):
     return None
 
 
+def recommender(test_point, k, data, target_items, model_class, get_item_info):
+    target = [0 for _ in range(len(target_items))]
+
+    model = model_class(data, target, test_point, k=k)
+    model.fit()
+
+    table = []
+    for i in model.indices:
+        table.append(get_item_info(target_items[i], data[i]))
+
+    return table
+
+
 def movie_recommender(test_point, k):
-    target = [0 for item in movie_titles]
-
-    model = KNearestNeighbours(data, target, test_point, k=k)
-
-    model.fit()
-    table = []
-    for i in model.indices:
-        table.append([movie_titles[i][0], movie_titles[i][2], data[i][-1]])
-
-    return table
+    return recommender(test_point, k, data, movie_titles, KNN, lambda movie, data_point: [movie[0], movie[2], data_point[-1]])
 
 
-def music_recommendation_basic(test_point, k):
-    target = [0 for item in tracks]
-    model = KNN_Class(data_music, target, test_point, k=k)
-    model.fit()
-    table = []
-    for i in model.indices:
-        table.append(tracks[i])
-    return table
-
-
-def process_reminder_time(message):
-    user = message.from_user
-    session = Session()
-    try:
-        reminder_time = datetime.strptime(message.text, '%H:%M')
-        db_user = session.query(User).filter_by(username=user.username).first()
-        if db_user:
-            db_user.reminder_time = reminder_time
-            session.commit()
-            bot.send_message(user.id, f'Время напоминания установлено на {message.text}')
-            schedule.clear(f'{user.id}_reminder')
-            schedule.every().day.at(message.text).do(send_reminder, user_id=user.id).tag(f'{user.id}_reminder')
-        else:
-            bot.send_message(user.id, 'Чтобы установить напоминание, сначала зарегистрируйтесь с помощью /start.')
-    except ValueError:
-        bot.send_message(user.id, 'Неправильный формат времени. Пожалуйста, введите время в формате HH:MM.')
-
-
-def send_reminder(user_id):
-    bot.send_message(user_id, 'Пора проверить бота!')
-
-
-def start_check_reminders():
-    while True:
-        schedule.run_pending()
-        time.sleep(30)
+def music_recommendation(test_point, k):
+    return recommender(test_point, k, data_music, tracks, KNN, lambda track, _: track)
 
 
 def main():
