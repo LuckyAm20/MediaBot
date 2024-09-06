@@ -1,24 +1,19 @@
-import hashlib
-import json
-import os
-import re
 import threading
-import time
-from datetime import datetime
 
-import requests
-import schedule
 import telebot
-from bs4 import BeautifulSoup
-from dotenv import load_dotenv
-from sqlalchemy import Column, DateTime, Integer, String, create_engine
-from sqlalchemy.orm import declarative_base, sessionmaker
 
-from bot_data import data_music, tracks, movie_titles, data, songs, movies, genres, movie_data_imdb, \
-    movie_data_kinopoisk, music_data_spotify, spotify_artist, spotify_genre
-from knn import KNN
-from remind import start_check_reminders, process_reminder_time, Session, User
+from authentication import start_auth
+from bot_data import data_music, tracks, data, songs, movies, genres, movie_data_imdb, movie_data_kinopoisk, \
+    music_data_spotify, spotify_artist, spotify_genre
+from main_buttons import create_buttons
+from parser_info import parse_website_film, parse_video_link
+from recommendation import music_recommendation, movie_recommender
+from remind import start_check_reminders, process_reminder_time
 from bot_data import bot
+from selection_top import (create_inline_keyboard_spotify_genre, send_music, create_inline_keyboard_spot,
+                           callback_kinopoisk, send_movie,
+                           create_inline_keyboard_imdb_genre, callback_spotify, callback_imdb,
+                           create_inline_keyboard_movie)
 
 
 # engine = create_engine('postgresql://postgres:postgres@localhost:5432/media-fusion')
@@ -27,95 +22,7 @@ from bot_data import bot
 
 @bot.message_handler(commands=['start'])
 def start(message):
-    user = message.from_user
-    if user.username is None:
-        bot.send_message(user.id, 'Для использования бота, пожалуйста, установите username в настройках Telegram.')
-        bot.send_message(user.id, 'Как только вы установите username, напишите любое сообщение для продолжения.')
-        bot.register_next_step_handler(message, check_username_set, bot)
-    else:
-        authenticate(message)
-
-
-def authenticate(message):
-    bot.send_message(message.from_user.id, 'Введите ваш login и пароль через пробел (например, login password):')
-    bot.register_next_step_handler(message, process_login_password)
-
-
-def validate(message):
-    bot.send_message(message.from_user.id, 'Пароль должен содержать только '
-                                           'латинские символы в верхнем и нижнем регистре, '
-                                           'цифры и как минимум один специальный символ'
-                                           'и иметь длину не менее 8 символов. '
-                                           'Введите ваш login и пароль через пробел')
-    bot.register_next_step_handler(message, process_login_password)
-
-
-def check_username_set(message):
-    user = message.from_user
-    if user.username is None:
-        bot.send_message(user.id, 'Пожалуйста, установите username в настройках Telegram.')
-        bot.register_next_step_handler(message, check_username_set, bot)
-    else:
-        start(message)
-
-
-def process_login_password(message):
-    user = message.from_user
-    session = Session()
-    login_password = message.text.split()
-    if len(login_password) != 2:
-        bot.send_message(user.id, 'Неправильный формат ввода. Введите login и пароль через пробел.')
-        bot.register_next_step_handler(message, process_login_password)
-    else:
-        login, password = login_password
-        db_user = session.query(User).filter_by(username=user.username).first()
-        if db_user:
-            if db_user.login != login or db_user.password != hash_password(password):
-                bot.send_message(user.id, 'Неверный логин или пароль. Попробуйте снова.')
-                bot.register_next_step_handler(message, authenticate)
-            else:
-                bot.send_message(user.id, 'Вы успешно авторизованы!')
-                create_buttons(message)
-        else:
-            db_user = session.query(User).filter_by(login=login, password=hash_password(password)).first()
-            if db_user:
-                db_user.username = user.username
-                session.commit()
-                bot.send_message(user.id, 'Данные тг аккаунта добавлены для входа. Вы успешно авторизованы!')
-            else:
-                if not valid(password):
-                    bot.send_message(user.id, 'Не валидный пароль.')
-                    validate(message)
-                else:
-                    new_user = User(username=user.username, login=login, password=hash_password(password))
-                    session.add(new_user)
-                    session.commit()
-                    bot.send_message(user.id, 'Пользователь успешно добавлен в базу данных.\nВы успешно авторизованы!')
-                    create_buttons(message)
-
-
-def valid(password):
-    pattern = re.compile(r'(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@#$%^&+=_!])[A-Za-z0-9@#$%^&+=_!]{8,}')
-    return bool(pattern.fullmatch(password))
-
-
-def hash_password(password):
-    password_bytes = password.encode('utf-8')
-    sha256 = hashlib.sha256()
-
-    sha256.update(password_bytes)
-    hashed_password = sha256.hexdigest()
-
-    return hashed_password
-
-
-def create_buttons(message):
-    keyboard = telebot.types.ReplyKeyboardMarkup(row_width=1)
-    keyboard.add(telebot.types.KeyboardButton(text='Поиск рекомендованных фильмов'),
-                 telebot.types.KeyboardButton(text='Поиск рекомендованной музыки'),
-                 telebot.types.KeyboardButton(text='Подборка топа'),
-                 telebot.types.KeyboardButton(text='Установить время'))
-    bot.send_message(message.from_user.id, 'Возможные действия', reply_markup=keyboard)
+    start_auth(message)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Установить время')
@@ -149,22 +56,10 @@ def process_keyboard_(message):
                      reply_markup=create_inline_keyboard_spotify_genre())
 
 
-def create_inline_keyboard_spotify_genre():
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=3)
-    buttons = [telebot.types.InlineKeyboardButton(genre, callback_data=f'{genre}_tops') for genre in spotify_genre]
-    keyboard.add(*buttons)
-    return keyboard
-
-
 @bot.callback_query_handler(func=lambda call: call.data.endswith('_tops'))
 def callback_handler(call):
     filtered_music = [song for song in music_data_spotify if call.data[:-5] == song['track_genre']]
-    sorted_music = sorted(filtered_music, key=lambda x: x['popularity'], reverse=True)[:10]
-
-    for ind, track in enumerate(sorted_music, start=1):
-        bot.send_message(call.message.chat.id, f'{ind}) {track['artists']} - {track['track_name']}\n'
-                                               f'Genre: {track['track_genre']}\n'
-                                               f'Popularity: {track['popularity']}')
+    send_music(filtered_music, call)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 spotify по исполнителям')
@@ -172,100 +67,22 @@ def process_keyboard_(message):
     bot.send_message(message.from_user.id, 'Выберите исполнителя', reply_markup=create_inline_keyboard_spot(1))
 
 
-def create_inline_keyboard_spot(page):
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
-    name = spotify_artist + [None]
-    start_index = (page - 1) * 20
-    end_index = min(start_index + 20, len(name))
-    for i in range(start_index, end_index):
-        keyboard.add(telebot.types.InlineKeyboardButton(f'{name[i] if name[i] is not None else "все исполнители"}', callback_data=f'spot_artist_{name[i]}'))
-    if page > 1:
-        keyboard.add(telebot.types.InlineKeyboardButton('◀ Предыдущая', callback_data=f'prev_page_spot_{page}'))
-    if end_index < len(name):
-        keyboard.add(telebot.types.InlineKeyboardButton('Следующая ▶', callback_data=f'next_page_spot_{page}'))
-    return keyboard
-
-
 @bot.callback_query_handler(func=lambda call: call.data.startswith('spot_artist') or call.data.startswith(
     'prev_page_spot') or call.data.startswith('next_page_spot'))
 def callback_handler(call):
-    user_id = call.message.chat.id
-    message_id = call.message.message_id
-    if not call.data.startswith('spot_artist'):
-        page = int(call.data.split('_')[-1])
-
-    if call.data.startswith('prev_page_spot'):
-        page -= 1
-    elif call.data.startswith('next_page_spot'):
-        page += 1
-    else:
-        index = call.data.split('_')[-1]
-        if index != 'None':
-            filtered_music = [song for song in music_data_spotify if index == song['artists']]
-        else:
-            filtered_music = music_data_spotify
-
-        sorted_music = sorted(filtered_music, key=lambda x: x['popularity'], reverse=True)[:10]
-        for ind, track in enumerate(sorted_music, start=1):
-            bot.send_message(call.message.chat.id, f'{ind}) {track['artists']} - {track['track_name']}\n'
-                                                   f'Genre: {track['track_genre']}\n'
-                                                   f'Popularity: {track['popularity']}')
-        return
-
-    keyboard = create_inline_keyboard_spot(page)
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    callback_spotify(call)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 kinopoisk')
 def process_keyboard_(message):
-    bot.send_message(message.from_user.id, 'Выберите год', reply_markup=create_inline_keyboard_kino(7))
-
-
-def create_inline_keyboard_kino(page):
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=1)
-    years = [i for i in range(1921, 2020)] + [None]
-    start_index = (page - 1) * 15
-    end_index = min(start_index + 15, len(years))
-    for i in range(start_index, end_index):
-        keyboard.add(telebot.types.InlineKeyboardButton(f'{years[i] if years[i] is not None else "все время"}', callback_data=f'kino_years_{years[i]}'))
-    if page > 1:
-        keyboard.add(telebot.types.InlineKeyboardButton('◀ Предыдущая', callback_data=f'prev_page_kino_{page}'))
-    if end_index < len(years):
-        keyboard.add(telebot.types.InlineKeyboardButton('Следующая ▶', callback_data=f'next_page_kino_{page}'))
-    return keyboard
+    bot.send_message(message.from_user.id, 'Выберите год',
+                     reply_markup=create_inline_keyboard_movie(7, [i for i in range(1921, 2020)] + [None]))
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('kino_years') or call.data.startswith(
     'prev_page_kino') or call.data.startswith('next_page_kino'))
 def callback_handler(call):
-    user_id = call.message.chat.id
-    message_id = call.message.message_id
-    if not call.data.startswith('kino_years'):
-        page = int(call.data.split('_')[-1])
-
-    if call.data.startswith('prev_page_kino'):
-        page -= 1
-    elif call.data.startswith('next_page_kino'):
-        page += 1
-    else:
-        index = call.data.split('_')[-1]
-        if index != 'None':
-            filtered_movies = [movie for movie in movie_data_kinopoisk if int(movie['year']) == int(index)]
-        else:
-            filtered_movies = movie_data_kinopoisk
-        sorted_movies = sorted(filtered_movies, key=lambda x: x['rating_ball'], reverse=True)[:10]
-
-        for ind, movie in enumerate(sorted_movies, start=1):
-            bot.send_message(call.message.chat.id, f'{ind})Film: {movie['movie']}\n'
-                                                   f'Year: {movie['year']}\n'
-                                                   f'Country: {movie['country']}\n'
-                                                   f'Rating: {movie['rating_ball']}\n'
-                                                   f'Description: {movie['overview']}\n'
-                                                   f'Logo URL:\n{movie['url_logo'][1:-1]}')
-        return
-
-    keyboard = create_inline_keyboard_kino(page)
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    callback_kinopoisk(call)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 imdb')
@@ -279,85 +96,46 @@ def process_keyboard_(message):
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 imdb по году')
 def process_keyboard_(message):
-    bot.send_message(message.from_user.id, 'Выберите год', reply_markup=create_inline_keyboard_imdb(7))
-
-
-def create_inline_keyboard_imdb(page):
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=1)
-    years = [i for i in range(1916, 2017)] + [None]
-    start_index = (page - 1) * 15
-    end_index = min(start_index + 15, len(years))
-    for i in range(start_index, end_index):
-        keyboard.add(telebot.types.InlineKeyboardButton(f'{years[i] if years[i] is not None else "все время"}', callback_data=f'imdb_years_{years[i]}'))
-    if page > 1:
-        keyboard.add(telebot.types.InlineKeyboardButton('◀ Предыдущая', callback_data=f'imdb_page_kino_{page}'))
-    if end_index < len(years):
-        keyboard.add(telebot.types.InlineKeyboardButton('Следующая ▶', callback_data=f'next_page_imdb_{page}'))
-    return keyboard
+    bot.send_message(message.from_user.id, 'Выберите год',
+                     reply_markup=create_inline_keyboard_movie(7, [i for i in range(1916, 2017)] + [None]))
 
 
 @bot.callback_query_handler(func=lambda call: call.data.startswith('imdb_years') or call.data.startswith(
     'prev_page_imdb') or call.data.startswith('next_page_imdb'))
 def callback_handler(call):
-    user_id = call.message.chat.id
-    message_id = call.message.message_id
-    if not call.data.startswith('imdb_years'):
-        page = int(call.data.split('_')[-1])
-
-    if call.data.startswith('prev_page_imdb'):
-        page -= 1
-    elif call.data.startswith('next_page_imdb'):
-        page += 1
-    else:
-        index = call.data.split('_')[-1]
-        if index != 'None':
-            filtered_movies = [movie for movie in movie_data_imdb if movie['title_year'] == int(index)]
-        else:
-            filtered_movies = movie_data_imdb
-        sorted_movies = sorted(filtered_movies, key=lambda x: x['imdb_score'], reverse=True)[:10]
-
-        for ind, movie in enumerate(sorted_movies, start=1):
-            bot.send_message(call.message.chat.id, f'{ind})Film: {movie['movie_title']}\n'
-                                                   f'Genres: {movie['genres']}\n'
-                                                   f'Country: {movie['country']}\n'
-                                                   f'Year: {movie['title_year']}\n'
-                                                   f'Rating: {movie['imdb_score']}\n'
-                                                   f'IMDB link: {movie['movie_imdb_link']}')
-        return
-
-    keyboard = create_inline_keyboard_imdb(page)
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    callback_imdb(call)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Топ 10 imdb по жанрам')
 def process_keyboard_(message):
-    bot.send_message(message.chat.id, f'Выберите один жанр из списка:', reply_markup=create_inline_keyboard_imdb_genre())
-
-
-def create_inline_keyboard_imdb_genre():
-    keyboard = telebot.types.InlineKeyboardMarkup(row_width=2)
-    buttons = [telebot.types.InlineKeyboardButton(genre, callback_data=f'{genre}_top') for genre in genres]
-    keyboard.add(*buttons)
-    return keyboard
+    bot.send_message(message.chat.id, f'Выберите один жанр из списка:',
+                     reply_markup=create_inline_keyboard_imdb_genre())
 
 
 @bot.callback_query_handler(func=lambda call: call.data.endswith('_top'))
 def callback_handler(call):
     filtered_movies = [movie for movie in movie_data_imdb if call.data[:-4] in movie['genres']]
-    sorted_movies = sorted(filtered_movies, key=lambda x: x['imdb_score'], reverse=True)[:10]
-
-    for ind, movie in enumerate(sorted_movies, start=1):
-        bot.send_message(call.message.chat.id, f'{ind})Film: {movie['movie_title']}\n'
-                                               f'Genres: {movie['genres']}\n'
-                                               f'Country: {movie['country']}\n'
-                                               f'Year: {movie['title_year']}\n'
-                                               f'Rating: {movie['imdb_score']}\n'
-                                               f'IMDB link: {movie['movie_imdb_link']}')
+    send_movie(call, filtered_movies)
 
 
 @bot.message_handler(func=lambda message: message.text == 'Назад')
 def process_keyboard(message):
     create_buttons(message)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 @bot.message_handler(func=lambda message: message.text == 'Поиск рекомендованной музыки')
@@ -681,8 +459,7 @@ def show_films_genre(message, count, sel_gen, rate):
         if movie_info:
             bot.send_message(message.chat.id, f'{movie_info[0]}\n'
                                               f'{movie_info[1]}\n'
-                                              f'{movie_info[2]}\n'
-                                              f'{movie_info[3]}\n')
+                                              f'{movie_info[2]}\n')
 
         else:
             bot.send_message(message.chat.id, 'Не удалось получить информацию о фильме')
@@ -867,74 +644,6 @@ def show_music_title(message, count, title: str):
                                           f'track: {value[1]}\n'
                                           f'Year: {value[2]}\n'
                                           f'Genre: {value[3]}')
-
-
-def parse_website_film(url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    url_data = requests.get(url, headers=headers).text
-    s_data = BeautifulSoup(url_data, 'html.parser')
-    imdb_content = s_data.find("meta", attrs={"name": "description"})
-
-    if imdb_content is not None:
-        movie_descr = imdb_content.attrs.get('content', '').split('.')
-
-        if len(movie_descr) >= 3:
-            movie_director = movie_descr[0]
-            movie_cast = str(movie_descr[1]).replace('With', 'Актёры: ').strip()
-            movie_story = 'Описание: ' + str(movie_descr[2]).strip() + '.'
-
-            # rating = s_data.find("div", class_="sc-bde20123-3 gPVQxL")
-            # rating = str(rating).split('<div class="sc-bde20123-3 gPVQxL')
-            # rating = str(rating[1]).split("</div>")
-            # rating = str(rating[0]).replace(''' "> ''', '').replace('">', '')
-            #
-            # movie_rating = 'Общие сборы: ' + rating
-
-            return [movie_director, movie_cast, movie_story]
-        else:
-            return None
-    else:
-        return None
-
-
-def parse_video_link(url):
-    headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
-    }
-
-    response = requests.get(url, headers=headers)
-
-    soup = BeautifulSoup(response.content, 'html.parser')
-
-    video_link_element = soup.find('a', href=lambda href: href and href.startswith('/video/'))
-    if video_link_element:
-        video_link = video_link_element['href']
-        return f'https://www.imdb.com{video_link}'
-    return None
-
-
-def recommender(test_point, k, data, target_items, model_class, get_item_info):
-    target = [0 for _ in range(len(target_items))]
-
-    model = model_class(data, target, test_point, k=k)
-    model.fit()
-
-    table = []
-    for i in model.indices:
-        table.append(get_item_info(target_items[i], data[i]))
-
-    return table
-
-
-def movie_recommender(test_point, k):
-    return recommender(test_point, k, data, movie_titles, KNN, lambda movie, data_point: [movie[0], movie[2], data_point[-1]])
-
-
-def music_recommendation(test_point, k):
-    return recommender(test_point, k, data_music, tracks, KNN, lambda track, _: track)
 
 
 def main():
