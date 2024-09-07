@@ -1,7 +1,7 @@
 import telebot
 
-from bot_data import spotify_genre, bot, spotify_artist, music_data_spotify, movie_data_kinopoisk, genres, \
-    movie_data_imdb
+from bot_data import (spotify_genre, bot_tg, spotify_artist, music_data_spotify,
+                      movie_data_kinopoisk, genres, movie_data_imdb)
 
 
 def create_inline_keyboard_spotify_genre():
@@ -14,9 +14,9 @@ def create_inline_keyboard_spotify_genre():
 def send_music(music, call):
     sorted_music = sorted(music, key=lambda x: x['popularity'], reverse=True)[:10]
     for ind, track in enumerate(sorted_music, start=1):
-        bot.send_message(call.message.chat.id, f'{ind}) {track['artists']} - {track['track_name']}\n'
-                                               f'Genre: {track['track_genre']}\n'
-                                               f'Popularity: {track['popularity']}')
+        bot_tg.send_message(call.message.chat.id, f'{ind}) {track['artists']} - {track['track_name']}\n'
+                                                  f'Genre: {track['track_genre']}\n'
+                                                  f'Popularity: {track['popularity']}')
 
 
 def create_inline_keyboard_spot(page):
@@ -56,7 +56,7 @@ def callback_spotify(call):
         return
 
     keyboard = create_inline_keyboard_spot(page)
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    bot_tg.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
 
 
 def create_inline_keyboard_movie(page, years):
@@ -93,16 +93,16 @@ def callback_kinopoisk(call):
         sorted_movies = sorted(filtered_movies, key=lambda x: x['rating_ball'], reverse=True)[:10]
 
         for ind, movie in enumerate(sorted_movies, start=1):
-            bot.send_message(call.message.chat.id, f'{ind})Film: {movie['movie']}\n'
-                                                   f'Year: {movie['year']}\n'
-                                                   f'Country: {movie['country']}\n'
-                                                   f'Rating: {movie['rating_ball']}\n'
-                                                   f'Description: {movie['overview']}\n'
-                                                   f'Logo URL:\n{movie['url_logo'][1:-1]}')
+            bot_tg.send_message(call.message.chat.id, f'{ind})Film: {movie['movie']}\n'
+                                                      f'Year: {movie['year']}\n'
+                                                      f'Country: {movie['country']}\n'
+                                                      f'Rating: {movie['rating_ball']}\n'
+                                                      f'Description: {movie['overview']}\n'
+                                                      f'Logo URL:\n{movie['url_logo'][1:-1]}')
         return
 
     keyboard = create_inline_keyboard_movie(page, [i for i in range(1921, 2020)] + [None])
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    bot_tg.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
 
 
 def callback_imdb(call):
@@ -128,7 +128,7 @@ def callback_imdb(call):
         return
 
     keyboard = create_inline_keyboard_movie(page, [i for i in range(1916, 2017)] + [None])
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    bot_tg.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
 
 
 def create_inline_keyboard_imdb_genre():
@@ -142,9 +142,9 @@ def send_movie(call, filtered_movies):
     sorted_movies = sorted(filtered_movies, key=lambda x: x['imdb_score'], reverse=True)[:10]
 
     for ind, movie in enumerate(sorted_movies, start=1):
-        bot.send_message(call.message.chat.id, f'{ind})Film: {movie['movie_title']}\n'
-                                               f'Genres: {movie['genres']}\n'
-                                               f'Country: {movie['country']}\n'
-                                               f'Year: {movie['title_year']}\n'
-                                               f'Rating: {movie['imdb_score']}\n'
-                                               f'IMDB link: {movie['movie_imdb_link']}')
+        bot_tg.send_message(call.message.chat.id, f'{ind})Film: {movie['movie_title']}\n'
+                                                  f'Genres: {movie['genres']}\n'
+                                                  f'Country: {movie['country']}\n'
+                                                  f'Year: {movie['title_year']}\n'
+                                                  f'Rating: {movie['imdb_score']}\n'
+                                                  f'IMDB link: {movie['movie_imdb_link']}')

@@ -1,6 +1,6 @@
 import telebot
 
-from bot_data import bot
+from bot_data import bot_tg
 
 
 def create_buttons(message):
@@ -9,4 +9,4 @@ def create_buttons(message):
                  telebot.types.KeyboardButton(text='Поиск рекомендованной музыки'),
                  telebot.types.KeyboardButton(text='Подборка топа'),
                  telebot.types.KeyboardButton(text='Установить время'))
-    bot.send_message(message.from_user.id, 'Возможные действия', reply_markup=keyboard)
+    bot_tg.send_message(message.from_user.id, 'Возможные действия', reply_markup=keyboard)

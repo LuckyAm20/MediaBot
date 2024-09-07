@@ -1,3 +1,4 @@
+import os
 
 from sqlalchemy import Column, DateTime, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
@@ -16,6 +17,6 @@ class User(Base):
     reminder_time = Column(DateTime)
 
 
-engine = create_engine('sqlite:///users.db')
+engine = create_engine(os.getenv('DATABASE_URL'))
 Base.metadata.create_all(engine)
 Session = sessionmaker(bind=engine)

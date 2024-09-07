@@ -2,11 +2,9 @@ import json
 import os
 
 import telebot
-from dotenv import load_dotenv
 
 
-load_dotenv()
-bot = telebot.TeleBot(os.getenv('TELEGRAM_API_TOKEN'))
+bot_tg = telebot.TeleBot(os.getenv('TELEGRAM_API_TOKEN'))
 
 genres = ['Action', 'Adventure', 'Animation', 'Biography', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family',
           'Fantasy', 'Film-Noir', 'Game-Show', 'History', 'Horror', 'Music', 'Musical', 'Mystery', 'News', 'Reality-TV',

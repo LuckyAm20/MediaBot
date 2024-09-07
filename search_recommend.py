@@ -1,6 +1,6 @@
 import telebot
 
-from bot_data import movies, tracks, bot, data_music, songs, data, genres
+from bot_data import movies, tracks, bot_tg, data_music, songs, data, genres
 from parser_info import parse_video_link, parse_website_film
 from recommendation import music_recommendation, movie_recommender
 
@@ -44,18 +44,18 @@ def callback(call, name, type):
         return
 
     keyboard = create_keyboard(page, name)
-    bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
+    bot_tg.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
 
 
 def send_slider(user_id, type, text, value, genre, rate=None):
-    bot.send_message(user_id, text,
-                     reply_markup=create_slider_keyboard(type, value, genre, rate))
+    bot_tg.send_message(user_id, text,
+                        reply_markup=create_slider_keyboard(type, value, genre, rate))
 
 
 def edit_slider(call, type, value, genre, rate=None):
-    bot.edit_message_reply_markup(chat_id=call.message.chat.id,
-                                  message_id=call.message.message_id,
-                                  reply_markup=create_slider_keyboard(type, value, genre, rate))
+    bot_tg.edit_message_reply_markup(chat_id=call.message.chat.id,
+                                     message_id=call.message.message_id,
+                                     reply_markup=create_slider_keyboard(type, value, genre, rate))
 
 
 def create_slider_keyboard(type, value, genre, rate=None):
@@ -93,7 +93,7 @@ def handle_query(query, name, type):
             ))
             if len(results) >= max_results:
                 break
-    bot.answer_inline_query(query.id, results)
+    bot_tg.answer_inline_query(query.id, results)
 
 
 def create_slider_keyboard_query(title, type, name):
@@ -135,20 +135,20 @@ def callback_mm(call, type):
                         3, value, rate)
         elif type == 't':
             count = int(call.data.split('_')[-1])
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                  text=f'Вы выбрали {value} похожих фильмов на {value}', reply_markup=None)
+            bot_tg.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=f'Вы выбрали {value} похожих фильмов на {value}', reply_markup=None)
             show_films_title(call.message, count, value)
         elif type == 'c':
             count = call.message.json['reply_markup']['inline_keyboard'][0][1]['text']
-            bot.send_message(call.message.chat.id,
-                             f'Вы выбрали поиск похожих по жанру "{value}" и рейтингу {rate}.'
-                             f' Количество фильмов: {count}')
+            bot_tg.send_message(call.message.chat.id,
+                                f'Вы выбрали поиск похожих по жанру "{value}" и рейтингу {rate}.'
+                                f' Количество фильмов: {count}')
             show_films_genre(call.message, count, value, rate)
         elif type == 'm':
             count = int(call.data.split('_')[-1])
-            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                                  text=f'Вы выбрали {count} похожих композиций на {' '.join(value.split('*'))}',
-                                  reply_markup=None)
+            bot_tg.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                     text=f'Вы выбрали {count} похожих композиций на {' '.join(value.split('*'))}',
+                                     reply_markup=None)
             show_music_title(call.message, count, value)
 
 
@@ -163,8 +163,8 @@ def callback_movie_genre(call):
         current_genres = []
 
     if call.data == "done" and current_genres != []:
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f'Выбранные жанры: {", ".join(current_genres)}', reply_markup=None)
+        bot_tg.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                 text=f'Выбранные жанры: {", ".join(current_genres)}', reply_markup=None)
         send_slider(call.message.chat.id, '',
                     'Нажмите на стрелочки для изменения рейтинга\nНажмите на число для выбора',
                     8, ', '.join(current_genres))
@@ -182,8 +182,8 @@ def callback_movie_genre(call):
     new_message_text = 'Выберите один или несколько жанров из списка и нажмите "Готово" после выбора:\n' + ', '.join(
         current_genres)
 
-    bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                          text=new_message_text, reply_markup=call.message.reply_markup)
+    bot_tg.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                             text=new_message_text, reply_markup=call.message.reply_markup)
 
 
 def show_films_genre(message, count, sel_gen, rate):
@@ -205,20 +205,20 @@ def film_info(message, table):
     ind = 0
     for movie, link, ratings in table:
         ind += 1
-        bot.send_message(message.chat.id, f'{ind}. Фильм - {movie}.\n'
-                                          f'IMDB Rating: {ratings}⭐\n'
-                                          f'link - {link}')
+        bot_tg.send_message(message.chat.id, f'{ind}. Фильм - {movie}.\n'
+                                             f'IMDB Rating: {ratings}⭐\n'
+                                             f'link - {link}')
         movie_info = parse_website_film(link)
         el = parse_video_link(link)
         if el is not None:
-            bot.send_message(message.chat.id, f'Trailer:\n{el}')
+            bot_tg.send_message(message.chat.id, f'Trailer:\n{el}')
         if movie_info:
-            bot.send_message(message.chat.id, f'{movie_info[0]}\n'
-                                              f'{movie_info[1]}\n'
-                                              f'{movie_info[2]}\n')
+            bot_tg.send_message(message.chat.id, f'{movie_info[0]}\n'
+                                                 f'{movie_info[1]}\n'
+                                                 f'{movie_info[2]}\n')
 
         else:
-            bot.send_message(message.chat.id, 'Не удалось получить информацию о фильме')
+            bot_tg.send_message(message.chat.id, 'Не удалось получить информацию о фильме')
 
 
 def show_music_title(message, count, title: str):
@@ -226,7 +226,7 @@ def show_music_title(message, count, title: str):
     table = music_recommendation(test_points, count + 1)
     table.pop(0)
     for ind, value in enumerate(table, start=1):
-        bot.send_message(message.chat.id, f'{ind})Author: {value[0]}\n'
-                                          f'track: {value[1]}\n'
-                                          f'Year: {value[2]}\n'
-                                          f'Genre: {value[3]}')
+        bot_tg.send_message(message.chat.id, f'{ind})Author: {value[0]}\n'
+                                             f'track: {value[1]}\n'
+                                             f'Year: {value[2]}\n'
+                                             f'Genre: {value[3]}')
