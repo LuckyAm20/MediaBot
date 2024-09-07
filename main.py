@@ -7,9 +7,10 @@ from bot_data import genres, movie_data_imdb, music_data_spotify
 from main_buttons import create_buttons
 from remind import start_check_reminders, process_reminder_time
 from bot_data import bot
-from search_recommend import (create_keyboard, callback_music, send_slider,
-                              callback, create_inline_keyboard, callback_movie_count,
-                              callback_movie_genre, handle_query, callback_movie_rate, callback_movie_title)
+from search_recommend import (create_keyboard, send_slider,
+                              callback, create_inline_keyboard,
+                              callback_movie_genre, handle_query,
+                              callback_mm)
 from selection_top import (create_inline_keyboard_spotify_genre, send_music, create_inline_keyboard_spot,
                            callback_kinopoisk, send_movie,
                            create_inline_keyboard_imdb_genre, callback_spotify, callback_imdb,
@@ -143,12 +144,6 @@ def callback_handler(call):
     callback(call, 'movie', 't')
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('sliderm_') or call.data.startswith(
-    'forwardm_') or call.data.startswith('backwardm_'))
-def callback_handler(call):
-    callback_music(call)
-
-
 @bot.inline_handler(lambda query: query.query.startswith('music: '))
 def handle_inline_query(query):
     handle_query(query, 'music', 'm')
@@ -159,7 +154,7 @@ def handle_inline_query(query):
     handle_query(query, 'movie', '')
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('countm_') or call.data.startswith('count_'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('count'))
 def callback_handler(call):
     title = call.data.split('_')[-1]
     type = call.data.split('_')[0][-1]
@@ -192,28 +187,18 @@ def process_search_by_title(call):
                      reply_markup=create_keyboard(1, 'movie'))
 
 
-@bot.callback_query_handler(func=lambda call: call.data.startswith('sliderc_') or call.data.startswith(
-    'forwardc_') or call.data.startswith('backwardc'))
+@bot.callback_query_handler(func=lambda call: call.data.startswith('slider') or call.data.startswith(
+    'forward') or call.data.startswith('backward'))
 def callback_handler(call):
-    callback_movie_count(call)
+    type = call.data.split('_')[0][-1]
+    type = '' if type in 'dr' else type
+    print(type)
+    callback_mm(call, type)
 
 
 @bot.callback_query_handler(func=lambda call: call.data in genres or call.data == 'done')
 def callback_handler(call):
     callback_movie_genre(call)
-
-
-@bot.callback_query_handler(
-    func=lambda call: call.data.startswith('slider_') or call.data.startswith('forward_') or call.data.startswith(
-        'backward_'))
-def callback_handler(call):
-    callback_movie_rate(call)
-
-
-@bot.callback_query_handler(func=lambda call: call.data.startswith('slidert_') or call.data.startswith(
-    'forwardt_') or call.data.startswith('backwardt_'))
-def callback_handler(call):
-    callback_movie_title(call)
 
 
 def main():

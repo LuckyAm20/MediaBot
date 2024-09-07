@@ -2,7 +2,6 @@ import time
 from datetime import datetime
 
 import schedule
-import telebot
 
 from bot_data import bot
 from database import Session, User
@@ -34,4 +33,3 @@ def start_check_reminders():
     while True:
         schedule.run_pending()
         time.sleep(30)
-

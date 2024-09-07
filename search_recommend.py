@@ -47,28 +47,6 @@ def callback(call, name, type):
     bot.edit_message_reply_markup(chat_id=user_id, message_id=message_id, reply_markup=keyboard)
 
 
-def callback_music(call):
-    title = call.data.split('_')[-2]
-    if call.data.startswith('forwardm_') or call.data.startswith('backwardm_'):
-
-        current_value = int(call.data.split('_')[-1])
-
-        if call.data.startswith('forwardm_'):
-            if current_value != 10:
-                current_value = min(current_value + 1, 10)
-                edit_slider(call, 'm', current_value, title)
-        elif call.data.startswith('backwardm_'):
-            if current_value != 1:
-                current_value = max(current_value - 1, 1)
-                edit_slider(call, 'm', current_value, title)
-    if call.data.startswith('sliderm_'):
-        value = int(call.data.split('_')[-1])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f'Вы выбрали {value} похожих композиций на {' '.join(title.split('*'))}',
-                              reply_markup=None)
-        show_music_title(call.message, value, title)
-
-
 def send_slider(user_id, type, text, value, genre, rate=None):
     bot.send_message(user_id, text,
                      reply_markup=create_slider_keyboard(type, value, genre, rate))
@@ -85,7 +63,7 @@ def create_slider_keyboard(type, value, genre, rate=None):
     if rate is None:
         text = f'{genre}_{value}'
     else:
-        text = f'{genre}_{rate}_{value}'
+        text = f'{rate}_{genre}_{value}'
     backward_button = telebot.types.InlineKeyboardButton('◀', callback_data=f'backward{type}_{text}')
     forward_button = telebot.types.InlineKeyboardButton('▶', callback_data=f'forward{type}_{text}')
     value_button = telebot.types.InlineKeyboardButton(str(value),
@@ -134,73 +112,44 @@ def create_inline_keyboard():
     return keyboard
 
 
-def callback_movie_count(call):
-    genre = call.data.split('_')[-3]
-    rate = call.data.split('_')[-2]
-    if call.data.startswith('forwardc_') or call.data.startswith('backwardc_'):
-
+def callback_mm(call, type):
+    rate = call.data.split('_')[-3] if len(call.data.split('_')) == 4 else None
+    value = call.data.split('_')[-2]
+    if call.data.startswith('forward') or call.data.startswith('backward'):
         current_value = int(call.data.split('_')[-1])
 
-        if call.data.startswith('forwardc_'):
-            if current_value != 15:
-                current_value = min(current_value + 1, 15)
-                edit_slider(call, 'c', current_value, genre, rate)
-        elif call.data.startswith('backwardc_'):
-            if current_value != 1:
-                current_value = max(current_value - 1, 1)
-                edit_slider(call, 'c', current_value, genre, rate)
-    if call.data.startswith('sliderc_'):
-        count = call.message.json['reply_markup']['inline_keyboard'][0][1]['text']
-        bot.send_message(call.message.chat.id,
-                         f'Вы выбрали поиск похожих по жанру "{genre}" и рейтингу {rate}. Количество фильмов: {count}')
-        show_films_genre(call.message, count, genre, rate)
-
-
-def callback_movie_rate(call):
-    genre = call.data.split('_')[-2]
-    if call.data.startswith('forward_') or call.data.startswith('backward_'):
-
-        current_value = int(call.data.split('_')[-1])
-
-        if call.data.startswith('forward_'):
+        if call.data.startswith('forward'):
             if current_value != 10:
                 current_value = min(current_value + 1, 10)
-                edit_slider(call, '', current_value, genre)
-        elif call.data.startswith('backward_'):
+                edit_slider(call, type, current_value, value, rate)
+        elif call.data.startswith('backward'):
             if current_value != 1:
                 current_value = max(current_value - 1, 1)
-                edit_slider(call, '', current_value, genre)
-    if call.data.startswith('slider_'):
-        rate = call.message.json['reply_markup']['inline_keyboard'][0][1]['text']
+                edit_slider(call, type, current_value, value, rate)
+    else:
+        if type == '':
+            rate = call.message.json['reply_markup']['inline_keyboard'][0][1]['text']
 
-        send_slider(call.message.chat.id, 'c',
-                    'Нажмите на стрелочки для изменения выбора\nчисла фильмов\nНажмите на число для выбора',
-                    3, genre, rate)
-
-
-def callback_movie_title(call):
-    title = call.data.split('_')[-2]
-    if call.data.startswith('forwardt_') or call.data.startswith('backwardt_'):
-
-        current_value = int(call.data.split('_')[-1])
-
-        if call.data.startswith('forwardt_'):
-            if current_value != 10:
-                current_value = min(current_value + 1, 10)
-                edit_slider(call, 't', current_value, title)
-        elif call.data.startswith('backwardt_'):
-            if current_value != 1:
-                current_value = max(current_value - 1, 1)
-                edit_slider(call, 't', current_value, title)
-    if call.data.startswith('slidert_'):
-        value = int(call.data.split('_')[-1])
-        bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
-                              text=f'Вы выбрали {value} похожих фильмов на {title}', reply_markup=None)
-        show_films_title(call.message, value, title)
-
-
-def callback_movie():
-    ...
+            send_slider(call.message.chat.id, 'c',
+                        'Нажмите на стрелочки для изменения выбора\nчисла фильмов\nНажмите на число для выбора',
+                        3, value, rate)
+        elif type == 't':
+            count = int(call.data.split('_')[-1])
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                  text=f'Вы выбрали {value} похожих фильмов на {value}', reply_markup=None)
+            show_films_title(call.message, count, value)
+        elif type == 'c':
+            count = call.message.json['reply_markup']['inline_keyboard'][0][1]['text']
+            bot.send_message(call.message.chat.id,
+                             f'Вы выбрали поиск похожих по жанру "{value}" и рейтингу {rate}.'
+                             f' Количество фильмов: {count}')
+            show_films_genre(call.message, count, value, rate)
+        elif type == 'm':
+            count = int(call.data.split('_')[-1])
+            bot.edit_message_text(chat_id=call.message.chat.id, message_id=call.message.message_id,
+                                  text=f'Вы выбрали {count} похожих композиций на {' '.join(value.split('*'))}',
+                                  reply_markup=None)
+            show_music_title(call.message, count, value)
 
 
 def callback_movie_genre(call):
